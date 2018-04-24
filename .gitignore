@@ -1,0 +1,8 @@
+.vscode/
+google/
+log/
+spotify/
+misc/
+__pycache__/
+*.sh
+.cache-*
