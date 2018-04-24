@@ -234,6 +234,10 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             message = '!wrongsong'
             conn.privmsg(self.channel, message)
 
+        elif cmd == 'code':
+            github_link = 'https://github.com/GeoffreyY/nikos-bot-backup'
+            conn.privmsg(self.channel, github_link)
+
         # The command was not recognized
         else:
             pass
