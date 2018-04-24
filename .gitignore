@@ -2,7 +2,7 @@
 google/
 log/
 spotify/
-misc/
+twitch/
 __pycache__/
 *.sh
 .cache-*
