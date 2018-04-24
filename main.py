@@ -22,11 +22,6 @@ SPOTIPY_REDIRECT_URI = 'http://localhost'
 
 SPOTIFY_USERNAME = 'geoffreyy1415'
 SPOTIFY_SCOPE = 'user-library-read'
-sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
-                                        client_id=SPOTIPY_CLIENT_ID,
-                                        client_secret=SPOTIPY_CLIENT_SECRET,
-                                        redirect_uri=SPOTIPY_REDIRECT_URI)
-sp = spotipy.Spotify(auth=sp_token)
 
 SONGLIST_URL = 'https://docs.google.com/spreadsheets/d/1-uwntIJDqMCnOUmvomK-5EqUnzHup2rABLBbhcotmZM/'
 SONGLIST_URL_SHORT = 'https://goo.gl/bwxXAW'
@@ -148,6 +143,10 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                 pos = message.find(' --> The song ')
                 requested_by = message[:pos]
                 song = message[pos+14:-29].split(' - ')
+                sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
+                                                        client_id=SPOTIPY_CLIENT_ID,
+                                                        client_secret=SPOTIPY_CLIENT_SECRET,
+                                                        redirect_uri=SPOTIPY_REDIRECT_URI)
                 sp = spotipy.Spotify(auth=sp_token)
                 sp_search_results = sp.search(q=' '.join(song), limit=1)
                 sp_song = sp_search_results['tracks']['items'][0]
