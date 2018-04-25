@@ -94,7 +94,6 @@ def delete_rows_raw(start, end):
     # error logging
     open('log/reply.txt', 'a').write(str(result)+'\n')
     print('deleted rows from ' + str(start) + ' to ' + str(end))
-    time_old = time_now
 
 
 def delete_rows(start, end):
@@ -113,6 +112,7 @@ def delete_rows(start, end):
         return False
 
     delete_rows_raw(start, end)
+    time_old = time_now
     return True
 
 
@@ -408,22 +408,21 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             artist = song_full[0]
             song = ' '.join(song_full[1:])
             requested_by = message[pos+14:]
-            print(song_full + requested_by)
+
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!A2:C').execute()
             found = False
             for i, entry in enumerate(result['values']):
-                if (entry[0].strip() == artist and entry[1].strip() == song and
-                        entry[2].strip() == remover):
+                if (entry[0].strip() == song and entry[1].strip() == artist and
+                        entry[2].strip() == requested_by):
                     row = i
                     found = True
+
             if not found:
-                print("Error: no entry listed as " + song +
-                      ' by ' + artist + ' from ' + remover)
+                print('Error: no entry listed as ' + song +
+                      ' by ' + artist + ' from ' + requested_by)
             else:
-                message = 'currently playing ' + \
-                    str(row) + num_suffix(row) + ' row on my songlist'
-                self.connection.privmsg(self.channel, message)
+                delete_rows_raw(1, row+1)
 
 
 def main():
