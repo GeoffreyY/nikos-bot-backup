@@ -111,6 +111,22 @@ def get_duration(milliseconds):
     return str(minute) + ':' + sec_str
 
 
+def num_suffix(num):
+    """get suffix for a number
+    e.g. 'st' for 101, 'nd' for 102, 'th' for 104"""
+    last_digits = num % 100
+    if last_digits in [11, 12, 13]:
+        return 'th'
+    elif last_digits % 10 == 1:
+        return 'st'
+    elif last_digits % 10 == 2:
+        return 'nd'
+    elif last_digits % 10 == 3:
+        return 'rd'
+    else:
+        return 'th'
+
+
 class TwitchBot(irc.bot.SingleServerIRCBot):
     """The twitch bot"""
 
@@ -197,6 +213,29 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     print("Error: no entry listed by " + remover)
                 else:
                     delete_rows(row+1, row+2)
+
+            # eg: 'Currrent song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
+            elif message[:14] == 'Current song: ':
+                pos = message.rfind(' Requested by ')
+                song_full = message[14:pos].split(' - ')
+                artist = song_full[0]
+                song = ' '.join(song_full[1:])
+                requested_by = message[pos+14:]
+                print(song_full + requested_by)
+                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                                 range='SongList!A2:C').execute()
+                found = False
+                for i, entry in enumerate(result['values']):
+                    if entry[0].strip() == artist and entry[1].strip() == song and entry[2].strip() == remover:
+                        row = i
+                        found = True
+                if not found:
+                    print("Error: no entry listed as " + song +
+                          ' by ' + artist + ' from ' + remover)
+                else:
+                    message = 'currently playing ' + \
+                        str(row) + num_suffix(row) + ' row on my songlist'
+                    self.connection.privmsg(self.channel, message)
 
         # If a chat message starts with an exclamation point, try to run it as a command
         if e.arguments[0][:1] == '!':
