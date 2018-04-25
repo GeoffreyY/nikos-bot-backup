@@ -6,4 +6,5 @@ twitch/
 __pycache__/
 *.sh
 .cache-*
+.pylintrc
 whitelist

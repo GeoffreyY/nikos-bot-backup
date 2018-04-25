@@ -54,111 +54,11 @@ BACKUP_SHEET_ID = 766377016  # id of 'datadump' sheet
 # cooldown between deleting rows in spreadsheet
 # in case multiple ppl request it at the same time
 # TODO: better method than using global variable?
-delete_wait = 5
-time_old = datetime.utcnow()
-print(time_old)
+DELETE_WAIT = 5
+TIME_OLD = datetime.utcnow()
+print(TIME_OLD)
 
-
-def add_song(song, artist, requested_by, duration, url):
-    """append song entry to the spreadsheet"""
-
-    time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-
-    # hash to uniquely identify the song entry
-    hashing = url + requested_by + time
-    hash_str = hashlib.md5(hashing.encode('utf-8')).hexdigest()
-
-    song_body = {'values': [
-        [song, artist, requested_by, duration, url, time, hash_str]]}
-
-    # add to current song list
-    result1 = SPREADSHEET.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID, range='Songlist!A2:G',
-        valueInputOption='USER_ENTERED', body=song_body).execute()
-    # and also permanent song list
-    result2 = SPREADSHEET.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID, range='datadump!A2:G',
-        valueInputOption='USER_ENTERED', body=song_body).execute()
-
-    # error logging
-    open('log/reply.txt', 'a').write(str(result1)+'\n')
-    open('log/reply.txt', 'a').write(str(result2)+'\n')
-    print('added song ' + song)
-
-
-def delete_rows_raw(start, end):
-    """delete rows from the spreadsheet"""
-
-    delete_row_body = {"requests": [{"deleteDimension": {
-        "range": {
-            "sheetId": SHEET_ID,
-            "dimension": "ROWS",
-            "startIndex": start,
-            "endIndex": end
-        }
-    }}, ], }
-    result = SPREADSHEET.spreadsheets().batchUpdate(
-        spreadsheetId=SPREADSHEET_ID, body=delete_row_body).execute()
-
-    # error logging
-    open('log/reply.txt', 'a').write(str(result)+'\n')
-    print('deleted rows from ' + str(start+1) + '..' + str(end+1))
-
-
-def delete_rows(start, end):
-    """check if there's any problems before actually deleting"""
-
-    # can't delete negative rows
-    if end < start:
-        print('deleting end row lower than start row')
-        # this shouldn't happen
-        raise ValueError('end less than start')
-
-    # don't delete if recently deleted rows already
-    global time_old
-    time_now = datetime.utcnow()
-    time_diff = time_now - time_old
-    if time_diff.seconds < delete_wait:
-        print('waiting ' + str(delete_wait - time_diff.seconds) + ' more seconds...')
-        return False
-
-    delete_rows_raw(start, end)
-    time_old = time_now
-    return True
-
-
-def delete_rows_perm(hash_str):
-    """delete song entry from 'permanent' song list"""
-
-    # find song with the hash
-    result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                     range='datadump!G2:G').execute()
-
-    row = -1
-    for (i, entry) in reversed(list(enumerate(result['values']))):
-        if len(entry) == 1 and entry[0] == hash_str:
-            row = i
-            break
-
-    if row == -1:
-        print('can\'t find song with provided hash')
-        return
-
-    delete_row_body = {"requests": [{"deleteDimension": {
-        "range": {
-            "sheetId": BACKUP_SHEET_ID,
-            "dimension": "ROWS",
-            "startIndex": row+1,
-            "endIndex": row+2
-        }
-    }}, ], }
-    result = SPREADSHEET.spreadsheets().batchUpdate(
-        spreadsheetId=SPREADSHEET_ID, body=delete_row_body).execute()
-
-    # error logging
-    open('log/reply.txt', 'a').write(str(result)+'\n')
-    print('deleted entry ' + hash_str +
-          ' (row ' + str(row+2) + ') from datadump')
+# helper functions
 
 
 def get_duration(milliseconds):
@@ -218,6 +118,8 @@ def log_message(message):
     open("log/comment_log.txt", "a").write(log + '\n')
     print(author + ': ' + comment)
 
+# twitch bot object
+
 
 class TwitchBot(irc.bot.SingleServerIRCBot):
     """The twitch bot"""
@@ -242,44 +144,41 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         irc.bot.SingleServerIRCBot.__init__(
             self, [(server, port, 'oauth:'+token)], username, username)
 
-    def on_welcome(self, c, e):
+    def on_welcome(self, connection, message):
         """no idea what this function does or how it's called"""
 
         print('Joining ' + self.channel)
 
         # request specific capabilities, whatever these are
-        c.cap('REQ', ':twitch.tv/membership')
-        c.cap('REQ', ':twitch.tv/tags')
-        c.cap('REQ', ':twitch.tv/commands')
+        connection.cap('REQ', ':twitch.tv/membership')
+        connection.cap('REQ', ':twitch.tv/tags')
+        connection.cap('REQ', ':twitch.tv/commands')
 
-        c.join(self.channel)
+        connection.join(self.channel)
 
         # set timer after joining
-        global time_old
-        time_old = datetime.utcnow()
+        global TIME_OLD
+        TIME_OLD = datetime.utcnow()
 
-    def on_pubmsg(self, c, e):
+    def on_pubmsg(self, connection, message):
         """parsing messages"""
 
-        author = e.source.split('!')[0]
-        message = e.arguments[0]
+        author = message.source.split('!')[0].lower()
+        comment = message.arguments[0]
 
         # logging
-        log_message(e)
+        log_message(message)
 
         shadowing = ['nikos_bot', 'iceman1415']
-        if author.lower() in shadowing:
-            self.shadow(message)
+        if author in shadowing:
+            shadow(comment)
 
-        # If a chat message starts with an exclamation point, try to run it as a command
-        if e.arguments[0][:1] == '!':
-            cmd = e.arguments[0].split(' ')[0][1:]
-            # logging
-            print('Received command: ' + cmd)
-            self.do_command(e, cmd, e.arguments[0].split(' ')[1:])
-        return
+        # If a chat comment starts with an exclamation point, try to run it as a command
+        if comment[:1] == '!':
+            cmd = comment.split(' ')[0][1:]
+            self.do_command(message, author, cmd, comment.split(' ')[1:])
 
-    def do_command(self, e, cmd, args):
+    def do_command(self, message, author, cmd, args):
         """execute commands when prompted
         '![cmd] [args]'"""
 
@@ -287,28 +186,20 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # so I can activate my own commands
         # TODO: this maybe also sleeping the bot (stop parsing comments)
         # so see if there's a better way
-        if e.source.split('!')[0] == 'iceman1415':
+        if author == 'iceman1415':
+            print('sleeping...')
             sleep(WAIT_TIME)
 
         conn = self.connection
         cmd = cmd.lower().replace('_', '')
 
-        '''
-        # provided example from twith
-        # Poll the API the get the current status of the stream
-        elif cmd == "title":
-            url = 'https://api.twitch.tv/kraken/channels/' + self.channel_id
-            headers = {'Client-ID': self.client_id,
-                       'Accept': 'application/vnd.twitchtv.v5+json'}
-            r = requests.get(url, headers=headers).json()
-            c.privmsg(self.channel, r['display_name'] +
-                      ' channel title is currently ' + r['status'])'''
+        print('Received command: ' + cmd)
 
         # provide song list link
         if cmd in ['songlist', 'sl']:
-            message = "nikos' internet is too bad to update his spreadsheet... " + \
+            comment = "nikos' internet is too bad to update his spreadsheet... " + \
                 SONGLIST_URL_SHORT + ' <-- try this one!'
-            conn.privmsg(self.channel, message)
+            conn.privmsg(self.channel, comment)
 
         # provide full link to song list spreadsheet
         elif cmd == 'songlistfull':
@@ -317,29 +208,32 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # delete first few rows of songlist
         # requires admin power
         elif cmd in ['deleterows', 'delete', 'del']:
-            if not has_power(e):
-                message = 'this command needs admin privilages :/'
-                conn.privmsg(self.channel, message)
+            if not has_power(message):
+                comment = 'this command needs admin privilages :/'
+                conn.privmsg(self.channel, comment)
             else:
                 # see if we're deleting multiple rows
-                try:
-                    row_num = int(args[0])
-                except:
+                if not args:
                     row_num = 1
+                else:
+                    try:
+                        row_num = int(args[0])
+                    except ValueError:
+                        row_num = 1
 
                 if delete_rows(1, row_num+1):
-                    message = 'deleted ' + str(row_num) + ' rows'
-                    conn.privmsg(self.channel, message)
+                    comment = 'deleted ' + str(row_num) + ' rows'
+                    conn.privmsg(self.channel, comment)
 
         # delete songs from songlist
         # requires admin power
         elif cmd in ['deleteupto', 'delupto', 'isplaying']:
-            if not has_power(e):
-                message = 'this command needs admin privilages :/'
-                conn.privmsg(self.channel, message)
+            if not has_power(message):
+                comment = 'this command needs admin privilages :/'
+                conn.privmsg(self.channel, comment)
             elif not args:
-                message = 'please specify which song to delete up to (using hash)'
-                conn.privmsg(self.channel, message)
+                comment = 'please specify which song to delete up to (using hash)'
+                conn.privmsg(self.channel, comment)
             else:
                 given_hash = args[0]
                 hash_length = len(given_hash)
@@ -357,21 +251,21 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                         row_num = i
 
                 if row_num == -1:
-                    message = 'can\'t find song with given hash'
-                    conn.privmsg(self.channel, message)
+                    comment = 'can\'t find song with given hash'
+                    conn.privmsg(self.channel, comment)
                 else:
                     if delete_rows(1, row_num+1):
-                        message = 'deleted ' + str(row_num) + ' rows'
-                        conn.privmsg(self.channel, message)
+                        comment = 'deleted ' + str(row_num) + ' rows'
+                        conn.privmsg(self.channel, comment)
 
         # request smash mouth
         elif cmd == 'sm':
-            message = '!sr smash mouth'
-            conn.privmsg(self.channel, message)
+            comment = '!sr smash mouth'
+            conn.privmsg(self.channel, comment)
 
         elif cmd == 'test':
-            message = 'test'
-            conn.privmsg(self.channel, message)
+            comment = 'test'
+            conn.privmsg(self.channel, comment)
 
         # remove smash mouth
         elif cmd == 'notsmashmouthagainplease':
@@ -387,11 +281,11 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                         found = False
 
             if found:
-                message = '!wrongsong'
-                conn.privmsg(self.channel, message)
+                comment = '!wrongsong'
+                conn.privmsg(self.channel, comment)
             else:
-                message = 'last song requested by me isn\'t smash mouth...'
-                conn.privmsg(self.channel, message)
+                comment = 'last song requested by me isn\'t smash mouth...'
+                conn.privmsg(self.channel, comment)
 
         # link to github
         elif cmd == 'code':
@@ -399,8 +293,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, github_link)
 
         elif cmd == 'bot':
-            message = 'MrDestructoid beep boop MrDestructoid'
-            conn.privmsg(self.channel, message)
+            comment = 'MrDestructoid beep boop MrDestructoid'
+            conn.privmsg(self.channel, comment)
 
         elif cmd == 'ping':
             conn.privmsg(self.channel, 'pong!')
@@ -422,99 +316,204 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     second -= 60
                     minute += 1
 
-            message = str(minute) + ':' + str(second) + \
+            comment = str(minute) + ':' + str(second) + \
                 ' worth of songs remaining'
-            conn.privmsg(self.channel, message)
+            conn.privmsg(self.channel, comment)
 
         elif cmd in ['commands', 'cmd', 'cmds']:
-            message = 'Partial list: !sl !sm !timeleft !code !ping'
-            conn.privmsg(self.channel, message)
+            comment = 'Partial list: !sl !sm !timeleft !code !ping'
+            conn.privmsg(self.channel, comment)
 
         elif cmd in ['admin', 'admincommands', 'admincmd', 'admincmds']:
-            message = 'Admin commands: !delete !deleteupto'
-            conn.privmsg(self.channel, message)
+            comment = 'Admin commands: !delete !deleteupto'
+            conn.privmsg(self.channel, comment)
 
-    def shadow(self, message):
-        """respond when nikos_bot acts"""
+# core functions
 
-        # add song to spreadsheet when nikos_bot added song
-        # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
-        if message[-29:] == ' has been added to the queue.':
-            # parse nikos_bot's comment
-            pos = message.find(' --> The song ')
-            requested_by = message[:pos]
-            song = message[pos+14:-29].split(' - ')
 
-            # generate a new spotify token for every query
-            sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
-                                                    client_id=SPOTIPY_CLIENT_ID,
-                                                    client_secret=SPOTIPY_CLIENT_SECRET,
-                                                    redirect_uri=SPOTIPY_REDIRECT_URI)
-            sp = spotipy.Spotify(auth=sp_token)
-            sp_search_results = sp.search(q=' '.join(song), limit=1)
+def add_song(song, artist, requested_by, duration, url):
+    """append song entry to the spreadsheet"""
 
-            # parse search result
-            sp_song = sp_search_results['tracks']['items'][0]
-            song_name = sp_song['name']
-            artist = sp_song['artists'][0]['name']
-            sp_url = sp_song['external_urls']['spotify']
-            song_duration = get_duration(sp_song['duration_ms'])
+    time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
-            # add song to song list
-            add_song(song_name, artist,
-                     requested_by, song_duration, sp_url)
+    # hash to uniquely identify the song entry
+    hashing = url + requested_by + time
+    hash_str = hashlib.md5(hashing.encode('utf-8')).hexdigest()
 
-        # remove song from spreadsheet when nikos_bot removed song
-        # eg: 'Lotusf198, Successfully removed your song!'
-        elif message[-33:] == ', Successfully removed your song!':
-            remover = message[:-33]
+    song_body = {'values': [
+        [song, artist, requested_by, duration, url, time, hash_str]]}
+
+    # add to current song list
+    result1 = SPREADSHEET.spreadsheets().values().append(
+        spreadsheetId=SPREADSHEET_ID, range='Songlist!A2:G',
+        valueInputOption='USER_ENTERED', body=song_body).execute()
+    # and also permanent song list
+    result2 = SPREADSHEET.spreadsheets().values().append(
+        spreadsheetId=SPREADSHEET_ID, range='datadump!A2:G',
+        valueInputOption='USER_ENTERED', body=song_body).execute()
+
+    # error logging
+    open('log/reply.txt', 'a').write(str(result1)+'\n')
+    open('log/reply.txt', 'a').write(str(result2)+'\n')
+    print('added song ' + song)
+
+
+def delete_rows_raw(start, end):
+    """delete rows from the spreadsheet"""
+
+    delete_row_body = {"requests": [{"deleteDimension": {
+        "range": {
+            "sheetId": SHEET_ID,
+            "dimension": "ROWS",
+            "startIndex": start,
+            "endIndex": end
+        }
+    }}, ], }
+    result = SPREADSHEET.spreadsheets().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID, body=delete_row_body).execute()
+
+    # error logging
+    open('log/reply.txt', 'a').write(str(result)+'\n')
+    print('deleted rows from ' + str(start+1) + '..' + str(end+1))
+
+
+def delete_rows(start, end):
+    """check if there's any problems before actually deleting"""
+
+    # can't delete negative rows
+    if end < start:
+        print('deleting end row lower than start row')
+        # this shouldn't happen
+        raise ValueError('end less than start')
+
+    # don't delete if recently deleted rows already
+    global TIME_OLD
+    time_now = datetime.utcnow()
+    time_diff = time_now - TIME_OLD
+    if time_diff.seconds < DELETE_WAIT:
+        print('waiting ' + str(DELETE_WAIT - time_diff.seconds) + ' more seconds...')
+        return False
+
+    delete_rows_raw(start, end)
+    TIME_OLD = time_now
+    return True
+
+
+def delete_rows_perm(hash_str):
+    """delete song entry from 'permanent' song list"""
+
+    # find song with the hash
+    result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                     range='datadump!G2:G').execute()
+
+    row = -1
+    for (i, entry) in reversed(list(enumerate(result['values']))):
+        if len(entry) == 1 and entry[0] == hash_str:
+            row = i
+            break
+
+    if row == -1:
+        print('can\'t find song with provided hash')
+        return
+
+    delete_row_body = {"requests": [{"deleteDimension": {
+        "range": {
+            "sheetId": BACKUP_SHEET_ID,
+            "dimension": "ROWS",
+            "startIndex": row+1,
+            "endIndex": row+2
+        }
+    }}, ], }
+    result = SPREADSHEET.spreadsheets().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID, body=delete_row_body).execute()
+
+    # error logging
+    open('log/reply.txt', 'a').write(str(result)+'\n')
+    print('deleted entry ' + hash_str +
+          ' (row ' + str(row+2) + ') from datadump')
+
+
+def shadow(comment):
+    """respond when nikos_bot acts"""
+
+    # add song to spreadsheet when nikos_bot added song
+    # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
+    if comment[-29:] == ' has been added to the queue.':
+        # parse nikos_bot's comment
+        pos = comment.find(' --> The song ')
+        requested_by = comment[:pos]
+        song = comment[pos+14:-29].split(' - ')
+
+        # generate a new spotify token for every query
+        sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
+                                                client_id=SPOTIPY_CLIENT_ID,
+                                                client_secret=SPOTIPY_CLIENT_SECRET,
+                                                redirect_uri=SPOTIPY_REDIRECT_URI)
+        spotify = spotipy.Spotify(auth=sp_token)
+        sp_search_results = spotify.search(q=' '.join(song), limit=1)
+
+        # parse search result
+        sp_song = sp_search_results['tracks']['items'][0]
+        song_name = sp_song['name']
+        artist = sp_song['artists'][0]['name']
+        sp_url = sp_song['external_urls']['spotify']
+        song_duration = get_duration(sp_song['duration_ms'])
+
+        # add song to song list
+        add_song(song_name, artist,
+                 requested_by, song_duration, sp_url)
+
+    # remove song from spreadsheet when nikos_bot removed song
+    # eg: 'Lotusf198, Successfully removed your song!'
+    elif comment[-33:] == ', Successfully removed your song!':
+        remover = comment[:-33]
+        result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                         range='SongList!C2:C').execute()
+
+        # find the location of song to remove
+        found = False
+        for i, entry in enumerate(result['values']):
+            if entry[0].strip() == remover:
+                row = i
+                found = True
+        row += 1
+
+        if not found:
+            print("Error: no entry listed by " + remover)
+        else:
+            # find the hash of the song to delete
+            hash_location = 'datadump!G' + str(row+1) + ':G' + str(row+1)
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                             range='SongList!C2:C').execute()
+                                                             range=hash_location).execute()
+            hash_str = result['values'][0][0]
 
-            # find the location of song to remove
-            found = False
-            for i, entry in enumerate(result['values']):
-                if entry[0].strip() == remover:
-                    row = i
-                    found = True
-            row += 1
+            delete_rows_raw(row, row+1)
+            delete_rows_perm(hash_str)
 
-            if not found:
-                print("Error: no entry listed by " + remover)
-            else:
-                # find the hash of the song to delete
-                hash_location = 'datadump!G' + str(row+1) + ':G' + str(row+1)
-                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                                 range=hash_location).execute()
-                hash_str = result['values'][0][0]
+    # eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
+    elif comment[:14] == 'Current song: ':
+        pos = comment.rfind(' Requested by ')
+        song_full = comment[14:pos].split(' - ')
+        artist = song_full[0]
+        song = ' '.join(song_full[1:])
+        requested_by = comment[pos+14:]
 
-                delete_rows_raw(row, row+1)
-                delete_rows_perm(hash_str)
+        result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                         range='SongList!A2:C').execute()
 
-        # eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
-        elif message[:14] == 'Current song: ':
-            pos = message.rfind(' Requested by ')
-            song_full = message[14:pos].split(' - ')
-            artist = song_full[0]
-            song = ' '.join(song_full[1:])
-            requested_by = message[pos+14:]
+        # find 'current song' from song list
+        found = False
+        for i, entry in enumerate(result['values']):
+            if (entry[0].strip() == song and entry[1].strip() == artist and
+                    entry[2].strip() == requested_by):
+                row = i
+                found = True
 
-            result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                             range='SongList!A2:C').execute()
-
-            # find 'current song' from song list
-            found = False
-            for i, entry in enumerate(result['values']):
-                if (entry[0].strip() == song and entry[1].strip() == artist and
-                        entry[2].strip() == requested_by):
-                    row = i
-                    found = True
-
-            if not found:
-                print('Error: no entry listed as ' + song +
-                      ' by ' + artist + ' from ' + requested_by)
-            else:
-                delete_rows_raw(1, row+1)
+        if not found:
+            print('Error: no entry listed as ' + song +
+                  ' by ' + artist + ' from ' + requested_by)
+        else:
+            delete_rows_raw(1, row+1)
 
 
 def main():
