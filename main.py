@@ -118,6 +118,24 @@ def log_message(message):
     open("log/comment_log.txt", "a").write(log + '\n')
     print(author + ': ' + comment)
 
+
+def sum_time(time_vec):
+    """sum 'min:sec' strings, return (min, sec) int pair"""
+
+    (minute, second) = (0, 0)
+    for time_str in time_vec:
+        if not time_str:
+            continue
+        (tmp_min, tmp_sec) = (int(time_str[:-3]), int(time_str[-2:]))
+        minute += tmp_min
+        second += tmp_sec
+
+    while second > 60:
+        second -= 60
+        minute += 1
+
+    return (minute, second)
+
 # twitch bot object
 
 
@@ -208,55 +226,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # delete first few rows of songlist
         # requires admin power
         elif cmd in ['deleterows', 'delete', 'del']:
-            if not has_power(message):
-                comment = 'this command needs admin privilages :/'
-                conn.privmsg(self.channel, comment)
-            else:
-                # see if we're deleting multiple rows
-                if not args:
-                    row_num = 1
-                else:
-                    try:
-                        row_num = int(args[0])
-                    except ValueError:
-                        row_num = 1
-
-                if delete_rows(1, row_num+1):
-                    comment = 'deleted ' + str(row_num) + ' rows'
-                    conn.privmsg(self.channel, comment)
-
-        # delete songs from songlist
-        # requires admin power
-        elif cmd in ['deleteupto', 'delupto', 'isplaying']:
-            if not has_power(message):
-                comment = 'this command needs admin privilages :/'
-                conn.privmsg(self.channel, comment)
-            elif not args:
-                comment = 'please specify which song to delete up to (using hash)'
-                conn.privmsg(self.channel, comment)
-            else:
-                given_hash = args[0]
-                hash_length = len(given_hash)
-                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                                 range='SongList!G2:G').execute()
-                # find the last song with the given hash
-                row_num = -1
-                for (i, entry) in reversed(list(enumerate(result['values']))):
-                    print(str(entry)+'/')
-                    print(given_hash+'/')
-                    if len(entry) != 1:
-                        pass
-                    elif (entry[0][:hash_length] == given_hash or
-                          entry[0][-hash_length:] == given_hash):
-                        row_num = i
-
-                if row_num == -1:
-                    comment = 'can\'t find song with given hash'
-                    conn.privmsg(self.channel, comment)
-                else:
-                    if delete_rows(1, row_num+1):
-                        comment = 'deleted ' + str(row_num) + ' rows'
-                        conn.privmsg(self.channel, comment)
+            self.delete(message, args)
 
         # request smash mouth
         elif cmd == 'sm':
@@ -304,17 +274,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!D2:D').execute()
             # add up the durations of the songs
-            (minute, second) = (0, 0)
-            for entry in result['values']:
-                if not entry:
-                    continue
-                time_str = entry[0]
-                (tmp_min, tmp_sec) = (int(time_str[:-3]), int(time_str[-2:]))
-                minute += tmp_min
-                second += tmp_sec
-                while second > 60:
-                    second -= 60
-                    minute += 1
+            (minute, second) = sum_time([x[0] for x in result['values']])
 
             comment = str(minute) + ':' + str(second) + \
                 ' worth of songs remaining'
@@ -327,6 +287,30 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         elif cmd in ['admin', 'admincommands', 'admincmd', 'admincmds']:
             comment = 'Admin commands: !delete !deleteupto'
             conn.privmsg(self.channel, comment)
+
+    def delete(self, message, args):
+        """!delete [row_num = 1]
+        delete first [row_num] rows from song_list"""
+
+        conn = self.connection
+
+        if not has_power(message):
+            comment = 'this command needs admin privilages :/'
+            conn.privmsg(self.channel, comment)
+        else:
+            # see if we're deleting multiple rows
+            if not args:
+                row_num = 1
+            else:
+                try:
+                    row_num = int(args[0])
+                except ValueError:
+                    row_num = 1
+
+            if delete_rows(1, row_num+1):
+                comment = 'deleted ' + str(row_num) + ' rows'
+                conn.privmsg(self.channel, comment)
+
 
 # core functions
 
