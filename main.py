@@ -19,8 +19,10 @@ from oauth2client import file as oafile, client as oaclient, tools as oatools
 import spotipy
 import spotipy.util as sputil
 
+# how long to wait before posting in chat again
 WAIT_TIME = 0.8
 
+# stuff to access spotify
 SPOTIPY_CLIENT_ID = open('spotify/clientid', 'r').read()
 SPOTIPY_CLIENT_SECRET = open('spotify/secret', 'r').read()
 SPOTIPY_REDIRECT_URI = 'http://localhost'
@@ -28,6 +30,7 @@ SPOTIPY_REDIRECT_URI = 'http://localhost'
 SPOTIFY_USERNAME = 'geoffreyy1415'
 SPOTIFY_SCOPE = 'user-library-read'
 
+# stuff to access google spreadsheed
 SPREADSHEET_ID = '1-uwntIJDqMCnOUmvomK-5EqUnzHup2rABLBbhcotmZM'
 SPREADSHEET_SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
 SPREADSHEET_CREDENTIALS_FILE = 'google/credentials.json'
@@ -45,12 +48,13 @@ if not SPREADSHEET_CREDS or SPREADSHEET_CREDS.invalid:
 SPREADSHEET = build(
     'sheets', 'v4', http=SPREADSHEET_CREDS.authorize(Http()))
 
-SHEET_ID = 25658793  # Songlist!
+SHEET_ID = 25658793  # id of 'Songlist' sheet
+BACKUP_SHEET_ID = 766377016  # id of 'datadump' sheet
 
-# cooldown so we don't accidentally delete too many rows
-# when multiple ppl request at the same time
+# cooldown between deleting rows in spreadsheet
+# in case multiple ppl request it at the same time
 # TODO: better method than using global variable?
-delete_wait = 10
+delete_wait = 5
 time_old = datetime.utcnow()
 print(time_old)
 
@@ -60,14 +64,18 @@ def add_song(song, artist, requested_by, duration, url):
 
     time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
+    # hash to uniquely identify the song entry
     hashing = url + requested_by + time
     hash_str = hashlib.md5(hashing.encode('utf-8')).hexdigest()
 
     song_body = {'values': [
         [song, artist, requested_by, duration, url, time, hash_str]]}
+
+    # add to current song list
     result1 = SPREADSHEET.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID, range='Songlist!A2:G',
         valueInputOption='USER_ENTERED', body=song_body).execute()
+    # and also permanent song list
     result2 = SPREADSHEET.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID, range='datadump!A2:G',
         valueInputOption='USER_ENTERED', body=song_body).execute()
@@ -98,10 +106,12 @@ def delete_rows_raw(start, end):
 
 
 def delete_rows(start, end):
-    """check if there's any problems"""
+    """check if there's any problems before actually deleting"""
 
+    # can't delete negative rows
     if end < start:
         print('deleting end row lower than start row')
+        # this shouldn't happen
         raise ValueError('end less than start')
 
     # don't delete if recently deleted rows already
@@ -119,7 +129,7 @@ def delete_rows(start, end):
 
 def get_duration(milliseconds):
     """convert song duration, queried from spotify,
-    from milliseconds to a min:sec fromat string"""
+    from milliseconds to a 'min:sec' fromat string"""
 
     seconds = ceil(milliseconds / 1000)
     (minute, second) = divmod(seconds, 60)
@@ -136,14 +146,13 @@ def num_suffix(num):
     last_digits = num % 100
     if last_digits in [11, 12, 13]:
         return 'th'
-    elif last_digits % 10 == 1:
+    if last_digits % 10 == 1:
         return 'st'
-    elif last_digits % 10 == 2:
+    if last_digits % 10 == 2:
         return 'nd'
-    elif last_digits % 10 == 3:
+    if last_digits % 10 == 3:
         return 'rd'
-    else:
-        return 'th'
+    return 'th'
 
 
 def has_power(message_full):
@@ -165,6 +174,9 @@ def has_power(message_full):
 
 
 def log_message(message):
+    """logging all comments, why not"""
+
+    # also logging with time stamp
     time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     author = message.source.split('!')[0]
     comment = message.arguments[0]
@@ -181,7 +193,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         self.token = token
         self.channel = '#' + channel
 
-        # Get the channel id, we will need this for v5 API calls
+        # Get the channel id, we will need this for twitch v5 API calls
         url = 'https://api.twitch.tv/kraken/users?login=' + channel
         headers = {'Client-ID': client_id,
                    'Accept': 'application/vnd.twitchtv.v5+json'}
@@ -197,11 +209,11 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             self, [(server, port, 'oauth:'+token)], username, username)
 
     def on_welcome(self, c, e):
-        """no idea what this function does and how it's called"""
+        """no idea what this function does or how it's called"""
 
         print('Joining ' + self.channel)
 
-        # You must request specific capabilities before you can use them
+        # request specific capabilities, whatever these are
         c.cap('REQ', ':twitch.tv/membership')
         c.cap('REQ', ':twitch.tv/tags')
         c.cap('REQ', ':twitch.tv/commands')
@@ -222,7 +234,6 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         log_message(e)
 
         shadowing = ['nikos_bot', 'iceman1415']
-
         if author.lower() in shadowing:
             self.shadow(message)
 
@@ -240,7 +251,9 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # sleep a bit to wait for chat cooldown
         # so I can activate my own commands
-        if e.source.split('!')[0].lower() == 'iceman1415':
+        # TODO: this maybe also sleeping the bot (stop parsing comments)
+        # so see if there's a better way
+        if e.source.split('!')[0] == 'Iceman1415':
             sleep(WAIT_TIME)
 
         conn = self.connection
@@ -248,7 +261,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         cmd.replace('_', '')
 
         '''
-        # provided example: Poll the API the get the current status of the stream
+        # provided example from twith
+        # Poll the API the get the current status of the stream
         elif cmd == "title":
             url = 'https://api.twitch.tv/kraken/channels/' + self.channel_id
             headers = {'Client-ID': self.client_id,
@@ -274,6 +288,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                 message = 'this command needs admin privilages :/'
                 conn.privmsg(self.channel, message)
             else:
+                # see if we're deleting multiple rows
                 try:
                     row_num = int(args[0])
                 except:
@@ -284,6 +299,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     conn.privmsg(self.channel, message)
 
         # delete songs from songlist
+        # requires admin power
         elif cmd in ['deleteupto', 'isplaying']:
             if not has_power(e):
                 message = 'this command needs admin privilages :/'
@@ -296,14 +312,17 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                 hash_length = len(given_hash)
                 result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                                  range='SongList!G2:G').execute()
+                # find the last song with the given hash
                 row_num = -1
                 for (i, entry) in reversed(list(enumerate(result['values']))):
                     print(str(entry)+'/')
                     print(given_hash+'/')
                     if len(entry) != 1:
                         pass
-                    elif entry[0][:hash_length] == given_hash or entry[0][-hash_length:] == given_hash:
+                    elif (entry[0][:hash_length] == given_hash or
+                          entry[0][-hash_length:] == given_hash):
                         row_num = i
+
                 if row_num == -1:
                     message = 'can\'t find song with given hash'
                     conn.privmsg(self.channel, message)
@@ -326,6 +345,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         elif cmd == 'notsmashmouthagainplease':
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!B2:C').execute()
+            # check if my last song request is smash mouth
             found = False
             for entry in result['values']:
                 if result[1].strip() == 'iceman1415':
@@ -336,9 +356,6 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
             if found:
                 message = '!wrongsong'
-                conn.privmsg(self.channel, message)
-                sleep(WAIT_TIME)
-                message = 'removed smash mouth! nikossWin'
                 conn.privmsg(self.channel, message)
             else:
                 message = 'last song requested by me isn\'t smash mouth...'
@@ -358,6 +375,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         elif cmd == 'timeremain':
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!F2:F').execute()
+            # add up the durations of the songs
             (minute, second) = (0, 0)
             for time_str in result['values']:
                 (tmp_min, tmp_sec) = (int(time_str[:-3]), int(time_str[-2:]))
@@ -377,20 +395,25 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # add song to spreadsheet when nikos_bot added song
         # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
         if message[-29:] == ' has been added to the queue.':
+            # parse nikos_bot's comment
             pos = message.find(' --> The song ')
             requested_by = message[:pos]
             song = message[pos+14:-29].split(' - ')
+
+            # generate a new spotify token for every query
             sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
                                                     client_id=SPOTIPY_CLIENT_ID,
                                                     client_secret=SPOTIPY_CLIENT_SECRET,
                                                     redirect_uri=SPOTIPY_REDIRECT_URI)
             sp = spotipy.Spotify(auth=sp_token)
             sp_search_results = sp.search(q=' '.join(song), limit=1)
+
+            # parse search result
             sp_song = sp_search_results['tracks']['items'][0]
             sp_url = sp_song['external_urls']['spotify']
-
             song_duration = get_duration(sp_song['duration_ms'])
 
+            # add song to song list
             add_song(' '.join(song[1:]), song[0],
                      requested_by, song_duration, sp_url)
 
@@ -400,11 +423,14 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             remover = message[:-33]
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!C2:C').execute()
+
+            # find the location of song to remove
             found = False
             for i, entry in enumerate(result['values']):
                 if entry[0].strip() == remover:
                     row = i
                     found = True
+
             if not found:
                 print("Error: no entry listed by " + remover)
             else:
@@ -420,6 +446,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!A2:C').execute()
+
+            # find 'current song' from song list
             found = False
             for i, entry in enumerate(result['values']):
                 if (entry[0].strip() == song and entry[1].strip() == artist and
