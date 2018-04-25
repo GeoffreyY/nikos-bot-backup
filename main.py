@@ -102,7 +102,7 @@ def delete_rows_raw(start, end):
 
     # error logging
     open('log/reply.txt', 'a').write(str(result)+'\n')
-    print('deleted rows from ' + str(start) + '..' + str(end))
+    print('deleted rows from ' + str(start+1) + '..' + str(end+1))
 
 
 def delete_rows(start, end):
@@ -125,6 +125,40 @@ def delete_rows(start, end):
     delete_rows_raw(start, end)
     time_old = time_now
     return True
+
+
+def delete_rows_perm(hash_str):
+    """delete song entry from 'permanent' song list"""
+
+    # find song with the hash
+    result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                     range='datadump!G2:G').execute()
+
+    row = -1
+    for (i, entry) in reversed(list(enumerate(result['values']))):
+        if len(entry) == 1 and entry[0] == hash_str:
+            row = i
+            break
+
+    if row == -1:
+        print('can\'t find song with provided hash')
+        return
+
+    delete_row_body = {"requests": [{"deleteDimension": {
+        "range": {
+            "sheetId": BACKUP_SHEET_ID,
+            "dimension": "ROWS",
+            "startIndex": row+1,
+            "endIndex": row+2
+        }
+    }}, ], }
+    result = SPREADSHEET.spreadsheets().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID, body=delete_row_body).execute()
+
+    # error logging
+    open('log/reply.txt', 'a').write(str(result)+'\n')
+    print('deleted entry ' + hash_str +
+          ' (row ' + str(row+2) + ') from datadump')
 
 
 def get_duration(milliseconds):
@@ -430,11 +464,19 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                 if entry[0].strip() == remover:
                     row = i
                     found = True
+            row += 1
 
             if not found:
                 print("Error: no entry listed by " + remover)
             else:
-                delete_rows_raw(row+1, row+2)
+                # find the hash of the song to delete
+                hash_location = 'datadump!G' + str(row+1) + ':G' + str(row+1)
+                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                                 range=hash_location).execute()
+                hash_str = result['values'][0][0]
+
+                delete_rows_raw(row, row+1)
+                delete_rows_perm(hash_str)
 
         # eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
         elif message[:14] == 'Current song: ':
