@@ -20,7 +20,7 @@ import spotipy
 import spotipy.util as sputil
 
 # how long to wait before posting in chat again
-WAIT_TIME = 0.8
+WAIT_TIME = 0.75
 
 # stuff to access spotify
 SPOTIPY_CLIENT_ID = open('spotify/clientid', 'r').read()
@@ -316,7 +316,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # delete first few rows of songlist
         # requires admin power
-        elif cmd in ['deleterows', 'delete']:
+        elif cmd in ['deleterows', 'delete', 'del']:
             if not has_power(e):
                 message = 'this command needs admin privilages :/'
                 conn.privmsg(self.channel, message)
@@ -333,7 +333,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # delete songs from songlist
         # requires admin power
-        elif cmd in ['deleteupto', 'isplaying']:
+        elif cmd in ['deleteupto', 'delupto', 'isplaying']:
             if not has_power(e):
                 message = 'this command needs admin privilages :/'
                 conn.privmsg(self.channel, message)
@@ -369,7 +369,6 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             message = '!sr smash mouth'
             conn.privmsg(self.channel, message)
 
-        # ping bot
         elif cmd == 'test':
             message = 'test'
             conn.privmsg(self.channel, message)
@@ -394,24 +393,26 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                 message = 'last song requested by me isn\'t smash mouth...'
                 conn.privmsg(self.channel, message)
 
-        # link to this code
+        # link to github
         elif cmd == 'code':
             github_link = 'https://github.com/GeoffreyY/nikos-bot-backup'
             conn.privmsg(self.channel, github_link)
 
-        # stupid command
         elif cmd == 'bot':
             message = 'MrDestructoid beep boop MrDestructoid'
             conn.privmsg(self.channel, message)
 
+        elif cmd == 'ping':
+            conn.privmsg(self.channel, 'pong!')
+
         # check length of remaning songs
-        elif cmd in ['timeremain', 'remain']:
+        elif cmd in ['timeleft', 'timeremain', 'remain']:
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!D2:D').execute()
             # add up the durations of the songs
             (minute, second) = (0, 0)
             for entry in result['values']:
-                if len(entry) == 0:
+                if not entry:
                     continue
                 time_str = entry[0]
                 (tmp_min, tmp_sec) = (int(time_str[:-3]), int(time_str[-2:]))
@@ -423,6 +424,14 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
             message = str(minute) + ':' + str(second) + \
                 ' worth of songs remaining'
+            conn.privmsg(self.channel, message)
+
+        elif cmd in ['commands', 'cmd', 'cmds']:
+            message = 'Partial list: !sl !sm !timeleft !code !ping'
+            conn.privmsg(self.channel, message)
+
+        elif cmd in ['admin', 'admincommands', 'admincmd', 'admincmds']:
+            message = 'Admin commands: !delete !deleteupto'
             conn.privmsg(self.channel, message)
 
     def shadow(self, message):
