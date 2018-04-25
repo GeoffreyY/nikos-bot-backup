@@ -277,16 +277,26 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, message)
 
         # remove smash mouth
-        # TODO: complete function
         elif cmd == 'notsmashmouthagainplease':
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                             range='SongList!A2:C').execute()
+                                                             range='SongList!B2:C').execute()
+            found = False
+            for entry in result['values']:
+                if result[1].strip() == 'iceman1415':
+                    if result[0].strip().lower() == 'smash mouth':
+                        found = True
+                    else:
+                        found = False
 
-            message = '!wrongsong'
-            conn.privmsg(self.channel, message)
-            sleep(WAIT_TIME)
-            message = 'removed smash mouth! nikossWin'
-            conn.privmsg(self.channel, message)
+            if found:
+                message = '!wrongsong'
+                conn.privmsg(self.channel, message)
+                sleep(WAIT_TIME)
+                message = 'removed smash mouth! nikossWin'
+                conn.privmsg(self.channel, message)
+            else:
+                message = 'last song requested by me isn\'t smash mouth...'
+                conn.privmsg(self.channel, message)
 
         # link to this code
         elif cmd == 'code':
