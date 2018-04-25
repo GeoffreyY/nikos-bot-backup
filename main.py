@@ -287,8 +287,26 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             github_link = 'https://github.com/GeoffreyY/nikos-bot-backup'
             conn.privmsg(self.channel, github_link)
 
+        # stupid command
         elif cmd == 'bot':
             message = 'MrDestructoid beep boop MrDestructoid'
+            conn.privmsg(self.channel, message)
+
+        # check length of remaning songs
+        elif cmd == 'timeremain':
+            result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                             range='SongList!F2:F').execute()
+            (minute, second) = (0, 0)
+            for time_str in result['values']:
+                (tmp_min, tmp_sec) = (int(time_str[:-3]), int(time_str[-2:]))
+                minute += tmp_min
+                second += tmp_sec
+                while second > 60:
+                    second -= 60
+                    minute += 1
+
+            message = str(minute) + ':' + str(second) + \
+                ' worth of songs remaining'
             conn.privmsg(self.channel, message)
 
     def shadow(self, message):
