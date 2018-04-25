@@ -242,20 +242,17 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!B2:C').execute()
             # check if my last song request is smash mouth
-            found = False
-            for entry in result['values']:
-                if entry[1] == 'Iceman1415':
-                    if entry[0].lower() == 'smash mouth':
-                        found = True
-                    else:
-                        found = False
-
-            if found:
-                comment = '!wrongsong'
-                conn.privmsg(self.channel, comment)
-            else:
-                comment = 'last song requested by me isn\'t smash mouth...'
-                conn.privmsg(self.channel, comment)
+            for entry in reversed(result['values']):
+                if entry[1] != 'Iceman1415':
+                    continue
+                elif entry[0].lower() == 'smash mouth':
+                    comment = '!wrongsong'
+                    conn.privmsg(self.channel, comment)
+                    break
+                else:
+                    comment = 'last song requested by me isn\'t smash mouth...'
+                    conn.privmsg(self.channel, comment)
+                    break
 
         # link to github
         elif cmd == 'code':
