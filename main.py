@@ -65,15 +65,16 @@ def add_song(song, artist, requested_by, duration, url):
 
     song_body = {'values': [
         [song, artist, requested_by, duration, url, time, hash_str]]}
-    result = SPREADSHEET.spreadsheets().values().append(
+    result1 = SPREADSHEET.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID, range='Songlist!A2:G',
         valueInputOption='USER_ENTERED', body=song_body).execute()
-    result = SPREADSHEET.spreadsheets().values().append(
+    result2 = SPREADSHEET.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID, range='datadump!A2:G',
         valueInputOption='USER_ENTERED', body=song_body).execute()
 
     # error logging
-    open('log/reply.txt', 'a').write(str(result)+'\n')
+    open('log/reply.txt', 'a').write(str(result1)+'\n')
+    open('log/reply.txt', 'a').write(str(result2)+'\n')
     print('added song ' + song)
 
 
@@ -93,7 +94,7 @@ def delete_rows_raw(start, end):
 
     # error logging
     open('log/reply.txt', 'a').write(str(result)+'\n')
-    print('deleted rows from ' + str(start) + ' to ' + str(end))
+    print('deleted rows from ' + str(start) + '..' + str(end))
 
 
 def delete_rows(start, end):
@@ -163,6 +164,15 @@ def has_power(message_full):
     return False
 
 
+def log_message(message):
+    time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    author = message.source.split('!')[0]
+    comment = message.arguments[0]
+    log = time + ' ' + author + ': ' + comment
+    open("log/comment_log.txt", "a").write(log + '\n')
+    print(author + ': ' + message)
+
+
 class TwitchBot(irc.bot.SingleServerIRCBot):
     """The twitch bot"""
 
@@ -209,8 +219,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         message = e.arguments[0]
 
         # logging
-        open("log/fulllog.txt", "a").write(str(e) + '\n')
-        print(author + ': ' + message)
+        log_message(e)
 
         shadowing = ['nikos_bot', 'iceman1415']
 
