@@ -79,20 +79,8 @@ def add_song(song, artist, requested_by, duration, url):
     print('added song ' + song)
 
 
-def delete_rows(start, end):
+def delete_rows_raw(start, end):
     """delete rows from the spreadsheet"""
-
-    if end < start:
-        print('deleting end row lower than start row')
-        raise ValueError('end less than start')
-
-    # don't delete if recently deleted rows already
-    global time_old
-    time_now = datetime.utcnow()
-    time_diff = time_now - time_old
-    if time_diff.seconds < delete_wait:
-        print('waiting ' + str(delete_wait - time_diff.seconds) + ' more seconds...')
-        return
 
     delete_row_body = {"requests": [{"deleteDimension": {
         "range": {
@@ -109,6 +97,25 @@ def delete_rows(start, end):
     open('log/reply.txt', 'a').write(str(result)+'\n')
     print('deleted rows from ' + str(start) + ' to ' + str(end))
     time_old = time_now
+
+
+def delete_rows(start, end):
+    """check if there's any problems"""
+
+    if end < start:
+        print('deleting end row lower than start row')
+        raise ValueError('end less than start')
+
+    # don't delete if recently deleted rows already
+    global time_old
+    time_now = datetime.utcnow()
+    time_diff = time_now - time_old
+    if time_diff.seconds < delete_wait:
+        print('waiting ' + str(delete_wait - time_diff.seconds) + ' more seconds...')
+        return False
+
+    delete_rows_raw(start, end)
+    return True
 
 
 def get_duration(milliseconds):
@@ -261,8 +268,37 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     row_num = int(args[0])
                 except:
                     row_num = 1
-                delete_rows(1, row_num+1)
 
+                if delete_rows(1, row_num+1):
+                    message = 'deleted ' + str(row_num) + ' rows'
+                    conn.privmsg(self.channel, message)
+
+        # delete songs from songlist
+        elif cmd == 'deleteupto':
+            if not has_power(e):
+                message = 'this command needs admin privilages :/'
+                conn.privmsg(self.channel, message)
+            elif not args:
+                message = 'please specify which song to delete up to (using hash)'
+                conn.privmsg(self.channel, message)
+            else:
+                given_hash = args[0]
+                hash_length = len(given_hash)
+                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                                 range='SongList!G2:G').execute()
+                row_num = -1
+                for (i, entry) in reversed(list(enumerate(result['values']))):
+                    print(str(entry)+'/')
+                    print(given_hash+'/')
+                    if len(entry) != 1:
+                        pass
+                    elif entry[0][:hash_length] == given_hash or entry[0][-hash_length:] == given_hash:
+                        row_num = i
+                if row_num == -1:
+                    message = 'can\'t find song with given hash'
+                    conn.privmsg(self.channel, message)
+                else:
+                    if delete_rows(1, row_num+1):
                 message = 'deleted ' + str(row_num) + ' rows'
                 conn.privmsg(self.channel, message)
 
@@ -362,7 +398,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             if not found:
                 print("Error: no entry listed by " + remover)
             else:
-                delete_rows(row+1, row+2)
+                delete_rows_raw(row+1, row+2)
 
         # eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
         elif message[:14] == 'Current song: ':
