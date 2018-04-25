@@ -216,7 +216,7 @@ def log_message(message):
     comment = message.arguments[0]
     log = time + ' ' + author + ': ' + comment
     open("log/comment_log.txt", "a").write(log + '\n')
-    print(author + ': ' + message)
+    print(author + ': ' + comment)
 
 
 class TwitchBot(irc.bot.SingleServerIRCBot):
@@ -287,12 +287,11 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # so I can activate my own commands
         # TODO: this maybe also sleeping the bot (stop parsing comments)
         # so see if there's a better way
-        if e.source.split('!')[0] == 'Iceman1415':
+        if e.source.split('!')[0] == 'iceman1415':
             sleep(WAIT_TIME)
 
         conn = self.connection
-        cmd = cmd.lower()
-        cmd.replace('_', '')
+        cmd = cmd.lower().replace('_', '')
 
         '''
         # provided example from twith
@@ -382,8 +381,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             # check if my last song request is smash mouth
             found = False
             for entry in result['values']:
-                if result[1].strip() == 'iceman1415':
-                    if result[0].strip().lower() == 'smash mouth':
+                if entry[1] == 'Iceman1415':
+                    if entry[0].lower() == 'smash mouth':
                         found = True
                     else:
                         found = False
@@ -406,12 +405,15 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, message)
 
         # check length of remaning songs
-        elif cmd == 'timeremain':
+        elif cmd in ['timeremain', 'remain']:
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                             range='SongList!F2:F').execute()
+                                                             range='SongList!D2:D').execute()
             # add up the durations of the songs
             (minute, second) = (0, 0)
-            for time_str in result['values']:
+            for entry in result['values']:
+                if len(entry) == 0:
+                    continue
+                time_str = entry[0]
                 (tmp_min, tmp_sec) = (int(time_str[:-3]), int(time_str[-2:]))
                 minute += tmp_min
                 second += tmp_sec
@@ -444,11 +446,13 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
             # parse search result
             sp_song = sp_search_results['tracks']['items'][0]
+            song_name = sp_song['name']
+            artist = sp_song['artists'][0]['name']
             sp_url = sp_song['external_urls']['spotify']
             song_duration = get_duration(sp_song['duration_ms'])
 
             # add song to song list
-            add_song(' '.join(song[1:]), song[0],
+            add_song(song_name, artist,
                      requested_by, song_duration, sp_url)
 
         # remove song from spreadsheet when nikos_bot removed song
