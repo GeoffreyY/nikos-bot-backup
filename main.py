@@ -114,6 +114,7 @@ def get_duration(milliseconds):
 def num_suffix(num):
     """get suffix for a number
     e.g. 'st' for 101, 'nd' for 102, 'th' for 104"""
+
     last_digits = num % 100
     if last_digits in [11, 12, 13]:
         return 'th'
@@ -125,6 +126,24 @@ def num_suffix(num):
         return 'rd'
     else:
         return 'th'
+
+
+def has_power(message_full):
+    """check if user has power to use advance commands"""
+
+    whitelist = open('whitelist', 'r').read().split('\n')
+
+    tags = message_full.tages
+    for item in tags:
+        if item['key'] == 'display-name':
+            name = item['value']
+            if name in whitelist:
+                return True
+        elif item['key'] == 'badges':
+            if 'moderator' in item['value'] or 'broadcaster' in item['value']:
+                return True
+
+    return False
 
 
 class TwitchBot(irc.bot.SingleServerIRCBot):
@@ -220,15 +239,19 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, SONGLIST_URL)
 
         # delete first few rows of spreadsheet
+        # requires admin power
         elif cmd == "deleterows":
-            try:
-                row_num = int(args[0])
-            except:
-                row_num = 1
-            delete_rows(1, row_num+1)
+            if not has_power(e):
+                pass
+            else:
+                try:
+                    row_num = int(args[0])
+                except:
+                    row_num = 1
+                delete_rows(1, row_num+1)
 
-            message = 'deleted ' + str(row_num) + ' rows'
-            conn.privmsg(self.channel, message)
+                message = 'deleted ' + str(row_num) + ' rows'
+                conn.privmsg(self.channel, message)
 
         # request smash mouth
         elif cmd == 'sm':
@@ -259,6 +282,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, message)
 
     def shadow(self, message):
+        """respond when nikos_bot acts"""
+
         # add song to spreadsheet when nikos_bot added song
         # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
         if ' has been added to the queue.' in message:

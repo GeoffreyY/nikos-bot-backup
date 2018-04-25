@@ -6,3 +6,4 @@ twitch/
 __pycache__/
 *.sh
 .cache-*
+whitelist
