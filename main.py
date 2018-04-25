@@ -19,8 +19,6 @@ from oauth2client import file as oafile, client as oaclient, tools as oatools
 import spotipy
 import spotipy.util as sputil
 
-shadowing = ['nikos_bot', 'iceman1415']
-
 WAIT_TIME = 0.8
 
 SPOTIPY_CLIENT_ID = open('spotify/clientid', 'r').read()
@@ -152,7 +150,7 @@ def has_power(message_full):
 
     whitelist = open('whitelist', 'r').read().split('\n')
 
-    tags = message_full.tages
+    tags = message_full.tags
     for item in tags:
         if item['key'] == 'display-name':
             name = item['value']
@@ -214,6 +212,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         open("log/fulllog.txt", "a").write(str(e) + '\n')
         print(author + ': ' + message)
 
+        shadowing = ['nikos_bot', 'iceman1415']
+
         if author.lower() in shadowing:
             self.shadow(message)
 
@@ -255,14 +255,15 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, message)
 
         # provide full link to song list spreadsheet
-        elif cmd == "songlistfull":
+        elif cmd == 'songlistfull':
             conn.privmsg(self.channel, SONGLIST_URL)
 
-        # delete first few rows of spreadsheet
+        # delete first few rows of songlist
         # requires admin power
-        elif cmd == "deleterows":
+        elif cmd in ['deleterows', 'delete']:
             if not has_power(e):
-                pass
+                message = 'this command needs admin privilages :/'
+                conn.privmsg(self.channel, message)
             else:
                 try:
                     row_num = int(args[0])
@@ -274,7 +275,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     conn.privmsg(self.channel, message)
 
         # delete songs from songlist
-        elif cmd == 'deleteupto':
+        elif cmd in ['deleteupto', 'isplaying']:
             if not has_power(e):
                 message = 'this command needs admin privilages :/'
                 conn.privmsg(self.channel, message)
@@ -299,8 +300,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     conn.privmsg(self.channel, message)
                 else:
                     if delete_rows(1, row_num+1):
-                message = 'deleted ' + str(row_num) + ' rows'
-                conn.privmsg(self.channel, message)
+                        message = 'deleted ' + str(row_num) + ' rows'
+                        conn.privmsg(self.channel, message)
 
         # request smash mouth
         elif cmd == 'sm':
