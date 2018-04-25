@@ -21,6 +21,8 @@ import spotipy.util as sputil
 
 shadowing = ['nikos_bot', 'iceman1415']
 
+WAIT_TIME = 0.8
+
 SPOTIPY_CLIENT_ID = open('spotify/clientid', 'r').read()
 SPOTIPY_CLIENT_SECRET = open('spotify/secret', 'r').read()
 SPOTIPY_REDIRECT_URI = 'http://localhost'
@@ -223,10 +225,11 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         # sleep a bit to wait for chat cooldown
         # so I can activate my own commands
         if e.source.split('!')[0].lower() == 'iceman1415':
-            sleep(0.8)
+            sleep(WAIT_TIME)
 
         conn = self.connection
         cmd = cmd.lower()
+        cmd.replace('_', '')
 
         '''
         # provided example: Poll the API the get the current status of the stream
@@ -275,11 +278,14 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # remove smash mouth
         # TODO: complete function
-        elif cmd == 'not_smash_mouth_again_please':
+        elif cmd == 'notsmashmouthagainplease':
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!A2:C').execute()
 
             message = '!wrongsong'
+            conn.privmsg(self.channel, message)
+            sleep(WAIT_TIME)
+            message = 'removed smash mouth! nikossWin'
             conn.privmsg(self.channel, message)
 
         # link to this code
