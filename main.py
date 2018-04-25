@@ -20,7 +20,7 @@ import spotipy
 import spotipy.util as sputil
 
 # how long to wait before posting in chat again
-WAIT_TIME = 0.75
+WAIT_TIME = 0.8
 
 # stuff to access spotify
 SPOTIPY_CLIENT_ID = open('spotify/clientid', 'r').read()
@@ -224,6 +224,9 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         elif cmd in ['deleterows', 'delete', 'del']:
             self.delete(message, args)
 
+        elif cmd in ['restore', 'restores', 'restorefrom', 'restoresfrom']:
+            self.restore(message, args)
+
         elif cmd == 'sm':
             conn.privmsg(self.channel, '!sr smash mouth')
 
@@ -298,6 +301,73 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             if delete_rows(1, row_num+1):
                 comment = 'deleted ' + str(row_num) + ' rows'
                 conn.privmsg(self.channel, comment)
+
+    def restore(self, message, args):
+        """!restore <hash>
+        restores songs to song list from datadump
+        using given hash"""
+
+        conn = self.connection
+
+        if not args:
+            comment = 'usage: !restore <hash>'
+            conn.privmsg(self.channel, comment)
+        elif not has_power(message):
+            comment = 'this command needs admin privilages :/'
+            conn.privmsg(self.channel, comment)
+        else:
+            old_row_data = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                                   range='Songlist!G2:G')
+            old_hash = old_row_data.execute()['values'][0][0]
+
+            result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                             range='datadump!G2:G').execute()
+
+            old_row = -1
+            new_row = -1
+            for (i, entry) in reversed(list(enumerate(result['values']))):
+                if not entry:
+                    continue
+                if entry[0] == old_hash:
+                    old_row = i
+                if entry[0] == args[0]:
+                    new_row = i
+                    break
+            if old_row == -1 or new_row == -1:
+                print('can\'t find song with provided hash')
+                return
+            row_diff = old_row - new_row
+
+            get_data_range = 'datadump!A' + \
+                str(new_row + 1) + ':G' + str(old_row)
+            restore_data = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                                   range=get_data_range).execute()
+
+            insert_row_body = {"requests": [{"insertDimension": {
+                "range": {
+                    "sheetId": SHEET_ID,
+                    "dimension": "ROWS",
+                    "startIndex": 1,
+                    "endIndex": 1 + row_diff
+                },
+                "inheritFromBefore": False
+            }}, ], }
+            result = SPREADSHEET.spreadsheets().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID, body=insert_row_body).execute()
+
+            open('log/reply.txt', 'a').write(str(result)+'\n')
+
+            paste_range = 'Songlist!A2:G' + str(row_diff + 1)
+            restore_body = {'range': paste_range,
+                            'majorDimension': 'ROWS',
+                            'values': restore_data['values']}
+            request = SPREADSHEET.spreadsheets().values().update(spreadsheetId=SPREADSHEET_ID,
+                                                                 range=paste_range,
+                                                                 valueInputOption='USER_ENTERED',
+                                                                 body=restore_body)
+            result = request.execute()
+
+            open('log/reply.txt', 'a').write(str(result)+'\n')
 
 
 # core functions
@@ -448,7 +518,7 @@ def find_and_add_song(comment):
 
 def remove_song(comment):
     """removes the song from song list when nikos_bot removed a song
-    eg: 'Lotusf198, Successfully removed your song!'"""
+    eg: 'Iceman1415, Successfully removed your song!'"""
 
     remover = comment[:-33]
     result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
