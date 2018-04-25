@@ -177,65 +177,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         print(author + ': ' + message)
 
         if author.lower() in shadowing:
-            # add song to spreadsheet when nikos_bot added song
-            # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
-            if ' has been added to the queue.' in message:
-                pos = message.find(' --> The song ')
-                requested_by = message[:pos]
-                song = message[pos+14:-29].split(' - ')
-                sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
-                                                        client_id=SPOTIPY_CLIENT_ID,
-                                                        client_secret=SPOTIPY_CLIENT_SECRET,
-                                                        redirect_uri=SPOTIPY_REDIRECT_URI)
-                sp = spotipy.Spotify(auth=sp_token)
-                sp_search_results = sp.search(q=' '.join(song), limit=1)
-                sp_song = sp_search_results['tracks']['items'][0]
-                sp_url = sp_song['external_urls']['spotify']
-
-                song_duration = get_duration(sp_song['duration_ms'])
-
-                add_song(' '.join(song[1:]), song[0],
-                         requested_by, song_duration, sp_url)
-
-            # remove song from spreadsheet when nikos_bot removed song
-            # eg: 'Lotusf198, Successfully removed your song!'
-            elif ', Successfully removed your song!' in message:
-                pos = message.find(', Successfully removed your song!')
-                remover = message[:pos]
-                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                                 range='SongList!C2:C').execute()
-                found = False
-                for i, entry in enumerate(result['values']):
-                    if entry[0].strip() == remover:
-                        row = i
-                        found = True
-                if not found:
-                    print("Error: no entry listed by " + remover)
-                else:
-                    delete_rows(row+1, row+2)
-
-            # eg: 'Currrent song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
-            elif message[:14] == 'Current song: ':
-                pos = message.rfind(' Requested by ')
-                song_full = message[14:pos].split(' - ')
-                artist = song_full[0]
-                song = ' '.join(song_full[1:])
-                requested_by = message[pos+14:]
-                print(song_full + requested_by)
-                result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                                 range='SongList!A2:C').execute()
-                found = False
-                for i, entry in enumerate(result['values']):
-                    if entry[0].strip() == artist and entry[1].strip() == song and entry[2].strip() == remover:
-                        row = i
-                        found = True
-                if not found:
-                    print("Error: no entry listed as " + song +
-                          ' by ' + artist + ' from ' + remover)
-                else:
-                    message = 'currently playing ' + \
-                        str(row) + num_suffix(row) + ' row on my songlist'
-                    self.connection.privmsg(self.channel, message)
+            self.shadow(message)
 
         # If a chat message starts with an exclamation point, try to run it as a command
         if e.arguments[0][:1] == '!':
@@ -267,12 +209,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             c.privmsg(self.channel, r['display_name'] +
                       ' channel title is currently ' + r['status'])'''
 
-        # no command
-        if not cmd:
-            pass
-
         # provide song list link
-        elif cmd in ['songlist', 'sl']:
+        if cmd in ['songlist', 'sl']:
             message = "nikos' internet is too bad to update his spreadsheet... " + \
                 SONGLIST_URL_SHORT + ' <-- try this one!'
             conn.privmsg(self.channel, message)
@@ -283,14 +221,14 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # delete first few rows of spreadsheet
         elif cmd == "deleterows":
-            if not args:
+            try:
+                row_num = int(args[0])
+            except:
                 row_num = 1
-            else:
-                try:
-                    row_num = int(args[0])
-                except ValueError:
-                    row_num = 1
             delete_rows(1, row_num+1)
+
+            message = 'deleted ' + str(row_num) + ' rows'
+            conn.privmsg(self.channel, message)
 
         # request smash mouth
         elif cmd == 'sm':
@@ -302,7 +240,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             message = 'test'
             conn.privmsg(self.channel, message)
 
-        # remoev smash mouth
+        # remove smash mouth
+        # TODO: complete function
         elif cmd == 'not_smash_mouth_again_please':
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!A2:C').execute()
@@ -315,9 +254,69 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             github_link = 'https://github.com/GeoffreyY/nikos-bot-backup'
             conn.privmsg(self.channel, github_link)
 
-        # The command was not recognized
-        else:
-            pass
+        elif cmd == 'bot':
+            message = 'MrDestructoid beep boop MrDestructoid'
+            conn.privmsg(self.channel, message)
+
+    def shadow(self, message):
+        # add song to spreadsheet when nikos_bot added song
+        # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
+        if ' has been added to the queue.' in message:
+            pos = message.find(' --> The song ')
+            requested_by = message[:pos]
+            song = message[pos+14:-29].split(' - ')
+            sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
+                                                    client_id=SPOTIPY_CLIENT_ID,
+                                                    client_secret=SPOTIPY_CLIENT_SECRET,
+                                                    redirect_uri=SPOTIPY_REDIRECT_URI)
+            sp = spotipy.Spotify(auth=sp_token)
+            sp_search_results = sp.search(q=' '.join(song), limit=1)
+            sp_song = sp_search_results['tracks']['items'][0]
+            sp_url = sp_song['external_urls']['spotify']
+
+            song_duration = get_duration(sp_song['duration_ms'])
+
+            add_song(' '.join(song[1:]), song[0],
+                     requested_by, song_duration, sp_url)
+
+        # remove song from spreadsheet when nikos_bot removed song
+        # eg: 'Lotusf198, Successfully removed your song!'
+        elif message[-33:] == ', Successfully removed your song!':
+            remover = message[:-33]
+            result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                             range='SongList!C2:C').execute()
+            found = False
+            for i, entry in enumerate(result['values']):
+                if entry[0].strip() == remover:
+                    row = i
+                    found = True
+            if not found:
+                print("Error: no entry listed by " + remover)
+            else:
+                delete_rows(row+1, row+2)
+
+        # eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
+        elif message[:14] == 'Current song: ':
+            pos = message.rfind(' Requested by ')
+            song_full = message[14:pos].split(' - ')
+            artist = song_full[0]
+            song = ' '.join(song_full[1:])
+            requested_by = message[pos+14:]
+            print(song_full + requested_by)
+            result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                             range='SongList!A2:C').execute()
+            found = False
+            for i, entry in enumerate(result['values']):
+                if entry[0].strip() == artist and entry[1].strip() == song and entry[2].strip() == remover:
+                    row = i
+                    found = True
+            if not found:
+                print("Error: no entry listed as " + song +
+                      ' by ' + artist + ' from ' + remover)
+            else:
+                message = 'currently playing ' + \
+                    str(row) + num_suffix(row) + ' row on my songlist'
+                self.connection.privmsg(self.channel, message)
 
 
 def main():
