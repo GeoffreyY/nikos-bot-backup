@@ -7,6 +7,8 @@ from math import ceil
 from datetime import datetime
 from time import sleep
 
+import hashlib
+
 import irc.bot
 import requests
 
@@ -57,9 +59,17 @@ def add_song(song, artist, requested_by, duration, url):
     """append song entry to the spreadsheet"""
 
     time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    song_body = {'values': [[song, artist, requested_by, duration, url, time]]}
+
+    hashing = url + requested_by + time
+    hash_str = hashlib.md5(hashing).hexdigest()
+
+    song_body = {'values': [
+        [song, artist, requested_by, duration, url, time, hash_str]]}
     result = SPREADSHEET.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID, range='Songlist!A2:F',
+        spreadsheetId=SPREADSHEET_ID, range='Songlist!A2:G',
+        valueInputOption='USER_ENTERED', body=song_body).execute()
+    result = SPREADSHEET.spreadsheets().values().append(
+        spreadsheetId=SPREADSHEET_ID, range='datadump!A2:G',
         valueInputOption='USER_ENTERED', body=song_body).execute()
 
     # error logging
