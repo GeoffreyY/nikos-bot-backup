@@ -56,13 +56,12 @@ BACKUP_SHEET_ID = 766377016  # id of 'datadump' sheet
 # TODO: better method than using global variable?
 DELETE_WAIT = 5
 TIME_OLD = datetime.utcnow()
-print(TIME_OLD)
 
 # helper functions
 
 
 def get_duration(milliseconds):
-    """convert song duration, queried from spotify,
+    """converts song duration, queried from spotify,
     from milliseconds to a 'min:sec' fromat string"""
 
     seconds = ceil(milliseconds / 1000)
@@ -74,7 +73,7 @@ def get_duration(milliseconds):
 
 
 def num_suffix(num):
-    """get suffix for a number
+    """gets suffix for the number
     e.g. 'st' for 101, 'nd' for 102, 'th' for 104"""
 
     last_digits = num % 100
@@ -90,7 +89,7 @@ def num_suffix(num):
 
 
 def has_power(message_full):
-    """check if user has power to use advance commands"""
+    """checks if user has power to use advance commands"""
 
     whitelist = open('whitelist', 'r').read().split('\n')
 
@@ -108,9 +107,9 @@ def has_power(message_full):
 
 
 def log_message(message):
-    """logging all comments, why not"""
+    """logging all comments"""
 
-    # also logging with time stamp
+    # logs with time stamp
     time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     author = message.source.split('!')[0]
     comment = message.arguments[0]
@@ -120,7 +119,7 @@ def log_message(message):
 
 
 def sum_time(time_vec):
-    """sum 'min:sec' strings, return (min, sec) int pair"""
+    """sums over 'min:sec' strings, returns (min, sec) int pair"""
 
     (minute, second) = (0, 0)
     for time_str in time_vec:
@@ -165,13 +164,12 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
     def on_welcome(self, connection, message):
         """no idea what this function does or how it's called"""
 
-        print('Joining ' + self.channel)
-
         # request specific capabilities, whatever these are
         connection.cap('REQ', ':twitch.tv/membership')
         connection.cap('REQ', ':twitch.tv/tags')
         connection.cap('REQ', ':twitch.tv/commands')
 
+        print('Joining ' + self.channel)
         connection.join(self.channel)
 
         # set timer after joining
@@ -179,7 +177,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         TIME_OLD = datetime.utcnow()
 
     def on_pubmsg(self, connection, message):
-        """parsing messages"""
+        """parses messages"""
 
         author = message.source.split('!')[0].lower()
         comment = message.arguments[0]
@@ -197,11 +195,10 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             self.do_command(message, author, cmd, comment.split(' ')[1:])
 
     def do_command(self, message, author, cmd, args):
-        """execute commands when prompted
+        """executes commands when prompted
         '![cmd] [args]'"""
 
-        # sleep a bit to wait for chat cooldown
-        # so I can activate my own commands
+        # sleep and wait for chat cooldown to use my own commands
         # TODO: this maybe also sleeping the bot (stop parsing comments)
         # so see if there's a better way
         if author == 'iceman1415':
@@ -223,17 +220,12 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
         elif cmd == 'songlistfull':
             conn.privmsg(self.channel, SONGLIST_URL)
 
-        # delete first few rows of songlist
-        # requires admin power
+        # delete first few rows of songlist, requires admin power
         elif cmd in ['deleterows', 'delete', 'del']:
             self.delete(message, args)
 
-        # request smash mouth
         elif cmd == 'sm':
             conn.privmsg(self.channel, '!sr smash mouth')
-
-        elif cmd == 'test':
-            conn.privmsg(self.channel, 'test')
 
         # remove smash mouth
         elif cmd == 'notsmashmouthagainplease':
@@ -251,10 +243,12 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                     conn.privmsg(self.channel, comment)
                     break
 
-        # link to github
         elif cmd == 'code':
             github_link = 'https://github.com/GeoffreyY/nikos-bot-backup'
             conn.privmsg(self.channel, github_link)
+
+        elif cmd == 'test':
+            conn.privmsg(self.channel, 'test')
 
         elif cmd == 'bot':
             comment = 'MrDestructoid beep boop MrDestructoid I\'m still in beta'
@@ -264,7 +258,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, 'pong!')
 
         # check length of remaning songs
-        elif cmd in ['timeleft', 'timeremain', 'remain']:
+        elif cmd in ['timeleft', 'timeremaining', 'timeremain', 'remain']:
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!D2:D').execute()
             # add up the durations of the songs
@@ -284,7 +278,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
     def delete(self, message, args):
         """!delete [row_num = 1]
-        delete first [row_num] rows from song_list"""
+        deletes first [row_num] rows from song_list"""
 
         conn = self.connection
 
@@ -310,7 +304,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
 
 def add_song(song, artist, requested_by, duration, url):
-    """append song entry to the spreadsheet"""
+    """appends song entry to the spreadsheet"""
 
     time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -337,7 +331,7 @@ def add_song(song, artist, requested_by, duration, url):
 
 
 def delete_rows_raw(start, end):
-    """delete rows from the spreadsheet"""
+    """deletes rows from the spreadsheet"""
 
     delete_row_body = {"requests": [{"deleteDimension": {
         "range": {
@@ -356,7 +350,7 @@ def delete_rows_raw(start, end):
 
 
 def delete_rows(start, end):
-    """check if there's any problems before actually deleting"""
+    """checks if there's any problems before actually deleting"""
 
     # can't delete negative rows
     if end < start:
@@ -378,7 +372,7 @@ def delete_rows(start, end):
 
 
 def delete_rows_perm(hash_str):
-    """delete song entry from 'permanent' song list"""
+    """deletes song entry from 'permanent' song list"""
 
     # find song with the hash
     result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
@@ -453,7 +447,7 @@ def find_and_add_song(comment):
 
 
 def remove_song(comment):
-    """remove song from spreadsheet when nikos_bot removed a song
+    """removes the song from song list when nikos_bot removed a song
     eg: 'Lotusf198, Successfully removed your song!'"""
 
     remover = comment[:-33]
@@ -511,6 +505,7 @@ def update_song_list(comment):
 
 def main():
     """main"""
+
     if len(sys.argv) != 5:
         print("Usage: twitchbot <username> <client id> <token> <channel>")
         sys.exit(1)
