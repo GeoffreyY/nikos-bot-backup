@@ -230,12 +230,10 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # request smash mouth
         elif cmd == 'sm':
-            comment = '!sr smash mouth'
-            conn.privmsg(self.channel, comment)
+            conn.privmsg(self.channel, '!sr smash mouth')
 
         elif cmd == 'test':
-            comment = 'test'
-            conn.privmsg(self.channel, comment)
+            conn.privmsg(self.channel, 'test')
 
         # remove smash mouth
         elif cmd == 'notsmashmouthagainplease':
@@ -246,8 +244,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                 if entry[1] != 'Iceman1415':
                     continue
                 elif entry[0].lower() == 'smash mouth':
-                    comment = '!wrongsong'
-                    conn.privmsg(self.channel, comment)
+                    conn.privmsg(self.channel, '!wrongsong')
                     break
                 else:
                     comment = 'last song requested by me isn\'t smash mouth...'
@@ -260,7 +257,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, github_link)
 
         elif cmd == 'bot':
-            comment = 'MrDestructoid beep boop MrDestructoid'
+            comment = 'MrDestructoid beep boop MrDestructoid I\'m still in beta'
             conn.privmsg(self.channel, comment)
 
         elif cmd == 'ping':
@@ -282,7 +279,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, comment)
 
         elif cmd in ['admin', 'admincommands', 'admincmd', 'admincmds']:
-            comment = 'Admin commands: !delete !deleteupto'
+            comment = 'Admin commands: !delete'
             conn.privmsg(self.channel, comment)
 
     def delete(self, message, args):
@@ -392,7 +389,6 @@ def delete_rows_perm(hash_str):
         if len(entry) == 1 and entry[0] == hash_str:
             row = i
             break
-
     if row == -1:
         print('can\'t find song with provided hash')
         return
@@ -415,86 +411,102 @@ def delete_rows_perm(hash_str):
 
 
 def shadow(comment):
-    """respond when nikos_bot acts"""
+    """responds when nikos_bot acts"""
 
-    # add song to spreadsheet when nikos_bot added song
-    # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
     if comment[-29:] == ' has been added to the queue.':
-        # parse nikos_bot's comment
-        pos = comment.find(' --> The song ')
-        requested_by = comment[:pos]
-        song = comment[pos+14:-29].split(' - ')
+        find_and_add_song(comment)
 
-        # generate a new spotify token for every query
-        sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
-                                                client_id=SPOTIPY_CLIENT_ID,
-                                                client_secret=SPOTIPY_CLIENT_SECRET,
-                                                redirect_uri=SPOTIPY_REDIRECT_URI)
-        spotify = spotipy.Spotify(auth=sp_token)
-        sp_search_results = spotify.search(q=' '.join(song), limit=1)
-
-        # parse search result
-        sp_song = sp_search_results['tracks']['items'][0]
-        song_name = sp_song['name']
-        artist = sp_song['artists'][0]['name']
-        sp_url = sp_song['external_urls']['spotify']
-        song_duration = get_duration(sp_song['duration_ms'])
-
-        # add song to song list
-        add_song(song_name, artist,
-                 requested_by, song_duration, sp_url)
-
-    # remove song from spreadsheet when nikos_bot removed song
-    # eg: 'Lotusf198, Successfully removed your song!'
     elif comment[-33:] == ', Successfully removed your song!':
-        remover = comment[:-33]
-        result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                         range='SongList!C2:C').execute()
+        remove_song(comment)
 
-        # find the location of song to remove
-        found = False
-        for i, entry in enumerate(result['values']):
-            if entry[0].strip() == remover:
-                row = i
-                found = True
-        row += 1
-
-        if not found:
-            print("Error: no entry listed by " + remover)
-        else:
-            # find the hash of the song to delete
-            hash_location = 'datadump!G' + str(row+1) + ':G' + str(row+1)
-            result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                             range=hash_location).execute()
-            hash_str = result['values'][0][0]
-
-            delete_rows_raw(row, row+1)
-            delete_rows_perm(hash_str)
-
-    # eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'
     elif comment[:14] == 'Current song: ':
-        pos = comment.rfind(' Requested by ')
-        song_full = comment[14:pos].split(' - ')
-        artist = song_full[0]
-        song = ' '.join(song_full[1:])
-        requested_by = comment[pos+14:]
+        update_song_list(comment)
 
+
+def find_and_add_song(comment):
+    """adds a song to songlist when nikos_bot added a song
+    eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'"""
+
+    # parse nikos_bot's comment
+    pos = comment.find(' --> The song ')
+    requested_by = comment[:pos]
+    song = comment[pos+14:-29].split(' - ')
+
+    # generate a new spotify token for every query
+    sp_token = sputil.prompt_for_user_token(SPOTIFY_USERNAME, SPOTIFY_SCOPE,
+                                            client_id=SPOTIPY_CLIENT_ID,
+                                            client_secret=SPOTIPY_CLIENT_SECRET,
+                                            redirect_uri=SPOTIPY_REDIRECT_URI)
+    spotify = spotipy.Spotify(auth=sp_token)
+    sp_search_results = spotify.search(q=' '.join(song), limit=1)
+
+    # parse search result
+    sp_song = sp_search_results['tracks']['items'][0]
+    song_name = sp_song['name']
+    artist = sp_song['artists'][0]['name']
+    sp_url = sp_song['external_urls']['spotify']
+    song_duration = get_duration(sp_song['duration_ms'])
+
+    # add song to song list
+    add_song(song_name, artist,
+             requested_by, song_duration, sp_url)
+
+
+def remove_song(comment):
+    """remove song from spreadsheet when nikos_bot removed a song
+    eg: 'Lotusf198, Successfully removed your song!'"""
+
+    remover = comment[:-33]
+    result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                     range='SongList!C2:C').execute()
+
+    # find the location of song to remove
+    found = False
+    for i, entry in enumerate(result['values']):
+        if entry[0].strip() == remover:
+            row = i
+            found = True
+    row += 1
+
+    if not found:
+        print("Error: no entry listed by " + remover)
+    else:
+        # find the hash of the song to delete
+        hash_location = 'datadump!G' + str(row+1) + ':G' + str(row+1)
         result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                         range='SongList!A2:C').execute()
+                                                         range=hash_location).execute()
+        hash_str = result['values'][0][0]
 
-        # find 'current song' from song list
-        found = False
-        for i, entry in enumerate(result['values']):
-            if (entry[0].strip() == song and entry[1].strip() == artist and
-                    entry[2].strip() == requested_by):
-                row = i
-                found = True
+        delete_rows_raw(row, row+1)
+        delete_rows_perm(hash_str)
 
-        if not found:
-            print('Error: no entry listed as ' + song +
-                  ' by ' + artist + ' from ' + requested_by)
-        else:
-            delete_rows_raw(1, row+1)
+
+def update_song_list(comment):
+    """updates song list to current position
+    eg: 'Current song: Avenged Sevenfold - Hail to the King Requested by Luna_Eclipse0'"""
+
+    pos = comment.rfind(' Requested by ')
+    song_full = comment[14:pos].split(' - ')
+    artist = song_full[0]
+    song = ' '.join(song_full[1:])
+    requested_by = comment[pos+14:]
+
+    result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
+                                                     range='SongList!A2:C').execute()
+
+    # find 'current song' from song list
+    found = False
+    for i, entry in enumerate(result['values']):
+        if (entry[0].strip() == song and entry[1].strip() == artist and
+                entry[2].strip() == requested_by):
+            row = i
+            found = True
+
+    if not found:
+        print('Error: no entry listed as ' + song +
+              ' by ' + artist + ' from ' + requested_by)
+    else:
+        delete_rows_raw(1, row+1)
 
 
 def main():
