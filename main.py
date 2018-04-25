@@ -39,13 +39,13 @@ SONGLIST_URL_SHORT = 'https://goo.gl/bwxXAW'
 SPREADSHEET_STORE = oafile.Storage(SPREADSHEET_CREDENTIALS_FILE)
 SPREADSHEET_CREDS = SPREADSHEET_STORE.get()
 if not SPREADSHEET_CREDS or SPREADSHEET_CREDS.invalid:
-    flow = oaclient.flow_from_clientsecrets(
+    FLOW = oaclient.flow_from_clientsecrets(
         SPREADSHEET_SECRETS_FILE, SPREADSHEET_SCOPES)
-    SPREADSHEET_CREDS = oatools.run_flow(flow, SPREADSHEET_STORE)
+    SPREADSHEET_CREDS = oatools.run_flow(FLOW, SPREADSHEET_STORE)
 SPREADSHEET = build(
     'sheets', 'v4', http=SPREADSHEET_CREDS.authorize(Http()))
 
-SHEET_ID = 25658793
+SHEET_ID = 25658793  # Songlist!
 
 # cooldown so we don't accidentally delete too many rows
 # when multiple ppl request at the same time
@@ -296,7 +296,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
         # add song to spreadsheet when nikos_bot added song
         # eg: 'Iceman1415 --> The song Smash Mouth - All Star has been added to the queue.'
-        if ' has been added to the queue.' in message:
+        if message[-29:] == ' has been added to the queue.':
             pos = message.find(' --> The song ')
             requested_by = message[:pos]
             song = message[pos+14:-29].split(' - ')
@@ -342,7 +342,8 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
                                                              range='SongList!A2:C').execute()
             found = False
             for i, entry in enumerate(result['values']):
-                if entry[0].strip() == artist and entry[1].strip() == song and entry[2].strip() == remover:
+                if (entry[0].strip() == artist and entry[1].strip() == song and
+                        entry[2].strip() == remover):
                     row = i
                     found = True
             if not found:
