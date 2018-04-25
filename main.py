@@ -61,7 +61,7 @@ def add_song(song, artist, requested_by, duration, url):
     time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
     hashing = url + requested_by + time
-    hash_str = hashlib.md5(hashing).hexdigest()
+    hash_str = hashlib.md5(hashing.encode('utf-8')).hexdigest()
 
     song_body = {'values': [
         [song, artist, requested_by, duration, url, time, hash_str]]}
