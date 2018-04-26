@@ -58,6 +58,7 @@ DELETE_WAIT = 5
 TIME_OLD = datetime.utcnow()
 
 # helper functions
+##################
 
 
 def get_duration(milliseconds):
@@ -119,7 +120,7 @@ def log_message(message):
 
 
 def sum_time(time_vec):
-    """sums over 'min:sec' strings, returns (min, sec) int pair"""
+    """sums over 'min:sec' strings, returns 'min:sec' string"""
 
     (minute, second) = (0, 0)
     for time_str in time_vec:
@@ -133,9 +134,14 @@ def sum_time(time_vec):
         second -= 60
         minute += 1
 
-    return (minute, second)
+    second_str = str(second)
+    while len(second_str) < 2:
+        second_str = '0' + second_str
+
+    return str(minute) + ':' + second_str
 
 # twitch bot object
+###################
 
 
 class TwitchBot(irc.bot.SingleServerIRCBot):
@@ -265,9 +271,9 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
                                                              range='SongList!D2:D').execute()
             # add up the durations of the songs
-            (minute, second) = sum_time([x[0] for x in result['values']])
+            total_duration = sum_time([x[0] for x in result['values']])
 
-            comment = str(minute) + ':' + str(second) + \
+            comment = 'approx. ' + total_duration + \
                 ' worth of songs remaining'
             conn.privmsg(self.channel, comment)
 
@@ -276,7 +282,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
             conn.privmsg(self.channel, comment)
 
         elif cmd in ['admin', 'admincommands', 'admincmd', 'admincmds']:
-            comment = 'Admin commands: !delete'
+            comment = 'Admin commands: !delete !restore'
             conn.privmsg(self.channel, comment)
 
     def delete(self, message, args):
@@ -371,6 +377,7 @@ class TwitchBot(irc.bot.SingleServerIRCBot):
 
 
 # core functions
+################
 
 
 def add_song(song, artist, requested_by, duration, url):
@@ -522,25 +529,19 @@ def remove_song(comment):
 
     remover = comment[:-33]
     result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                     range='SongList!C2:C').execute()
+                                                     range='SongList!C2:G').execute()
 
     # find the location of song to remove
-    found = False
+    hash_str = ''
     for i, entry in enumerate(result['values']):
         if entry[0].strip() == remover:
             row = i
-            found = True
+            hash_str = entry[4].strip()
     row += 1
 
-    if not found:
+    if not hash_str:
         print("Error: no entry listed by " + remover)
     else:
-        # find the hash of the song to delete
-        hash_location = 'datadump!G' + str(row+1) + ':G' + str(row+1)
-        result = SPREADSHEET.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID,
-                                                         range=hash_location).execute()
-        hash_str = result['values'][0][0]
-
         delete_rows_raw(row, row+1)
         delete_rows_perm(hash_str)
 
